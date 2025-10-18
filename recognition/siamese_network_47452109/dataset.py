@@ -20,7 +20,9 @@ def open_rgb(path):
     return img.convert("RGB") if img.mode != "RGB" else img
 
 class MelanomaDataset(Dataset):
-    """Converts jpg data into data usable by the model"""
+    """
+    Reads raw data and gets it ready for machine learning
+    """
     def __init__(self, root):
         self.root = root # folder with data
         self.metadata = None 
@@ -30,10 +32,13 @@ class MelanomaDataset(Dataset):
     def __getitem__(self, index):
         return
     
-    def _read_metadata(self, images_dir: str, subset = False):
+    def _read_metadata(self, images_dir: str, subset = False) -> pd.DataFrame:
         """
-        Reads metadata file.             \n
-        :subset: True - image_name, patient_id and target columns <i>only</i>. False - all columns in metadata file.
+        Reads metadata file.             
+
+        :param images_dir: Image directory
+        :param subset: True - image_name, patient_id and target columns <i>only</i>. False - all columns in metadata file.
+        :returns: metadata file as dataframe
         """
         self.root = images_dir
         train_groundtruth = pd.read_csv(self.root + "ISIC_2020_Training_GroundTruth_v2.csv")
@@ -45,9 +50,12 @@ class MelanomaDataset(Dataset):
         self.metadata = train_groundtruth
         return train_groundtruth
     
-    def get_subset(self, class_size: int, seed: int, reduced = False):
+    def get_subset(self, class_size: int, seed: int, reduced = False) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Gets a random subset of the data with equal amounts of benign/malignant
+
+        :param class_size: Number of samples from each class. Subset size will be 2*class_size.
+        :returns: dataframe with subset of data with equal amounts of each class as per class_size
         """
         meta = self._read_metadata(self.root, reduced)
         benign = meta[meta["target"]== 0] 
@@ -110,7 +118,7 @@ class MelanomaDataset(Dataset):
 
             img1 = self.transform(img1)
             img2 = self.transform(img2)
-            return img1, img2, label
+            yield img1, img2, label
 
 
 # Test
