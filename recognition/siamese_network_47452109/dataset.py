@@ -1,18 +1,14 @@
 """
 File must contain the data loader for loading and preprocessing your data
 """
+import os
+import global_vars as gv
 import torch
 from torch.utils.data import Dataset
+from torchvision import transforms
 import pandas as pd
-import numpy as np
 from PIL import Image
-from pathlib import Path
 import random
-
-#TODO: Augmentation?
-#TODO: Transform
-
-SEED = 42
 
 # Helper functions: 
 def open_rgb(path):
@@ -25,39 +21,38 @@ class MelanomaDataset(Dataset):
     """
     def __init__(self, root):
         self.root = root # folder with data
-        self.metadata = None 
-        self.subset_df = None
+        self.metadata = self._read_metadata(root) 
+        self.data = None
         super().__init__()
 
     def __getitem__(self, index):
-        return
+        data = self.metadata.iloc[index]
+        img_name = data["image_name"]
+        img = open_rgb(self.root + "\\train\\" + img_name + ".jpg")
+        img = self.transform(img)
+        target = data["target"]
+        return img, torch.tensor(target)
     
-    def _read_metadata(self, images_dir: str, subset = False) -> pd.DataFrame:
+    def _read_metadata(self, root: str) -> pd.DataFrame:
         """
         Reads metadata file.             
 
         :param images_dir: Image directory
-        :param subset: True - image_name, patient_id and target columns <i>only</i>. False - all columns in metadata file.
-        :returns: metadata file as dataframe
         """
-        self.root = images_dir
-        train_groundtruth = pd.read_csv(self.root + "ISIC_2020_Training_GroundTruth_v2.csv")
-        
-        if subset: 
-            self.metadata = train_groundtruth
-            return train_groundtruth[["image_name", "patient_id", "target"]]
-        
+        train_groundtruth = pd.read_csv(os.path.join(root, "ISIC_2020_Training_GroundTruth_v2.csv"))
         self.metadata = train_groundtruth
         return train_groundtruth
     
-    def get_subset(self, class_size: int, seed: int, reduced = False) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def set_subset(self, class_size: int, seed: int):
         """
-        Gets a random subset of the data with equal amounts of benign/malignant
+        Sets data to a random subset of the data with equal amounts of benign/malignant targets
 
         :param class_size: Number of samples from each class. Subset size will be 2*class_size.
         :returns: dataframe with subset of data with equal amounts of each class as per class_size
+
+        TODO: REMOVE ME BEFORE SUBMISSION. FOR TESTING PURPOSES ONLY.
         """
-        meta = self._read_metadata(self.root, reduced)
+        meta = self._read_metadata(self.root)
         benign = meta[meta["target"]== 0] 
         malignant = meta[meta["target"] == 1]
 
@@ -74,19 +69,25 @@ class MelanomaDataset(Dataset):
             .sample(frac=1.0, random_state=seed + 2).reset_index(drop=True)
         subset_df["file_name"] = subset_df["image_name"].astype(str) + ".jpg"
 
-        self.subset_df = subset_df
+        self.data = subset_df
+        return subset_df
+   
+    def transform(self, img):
+        """transform function"""
+        trans = transforms.Compose(
+            [
+                transforms.RandomHorizontalFlip(p=0.5),
+                transforms.RandomVerticalFlip(p=0.5),
+                transforms.ToTensor()
+            ]
+        )
+        return trans(img)
 
-        return subset_df, benign_sample, malignant_sample
-
-    def transform(self, x):
-        """will be updated to transform"""
-        return x
-
-    def pair_generator(self, data: pd.DataFrame, proportion_pos = 0.5, seed = SEED):
+    def pair_generator(self, data: pd.DataFrame, proportion_pos = 0.5, seed = gv.SEED):
         """
         pair generator.
         """
-        img_dir = self.root + "train\\"
+        img_dir = os.path.join(self.root, "train") + os.sep
         sort = {0: [], 1: []}
         for i, row in data.iterrows():
             target = int(row["target"])
@@ -95,7 +96,6 @@ class MelanomaDataset(Dataset):
         rng = random.Random(seed)
 
         while True:
-            
             same = rng.random() < proportion_pos
 
             if same: # two of same class
@@ -119,13 +119,4 @@ class MelanomaDataset(Dataset):
             img1 = self.transform(img1)
             img2 = self.transform(img2)
             yield img1, img2, label
-
-
-# Test
-path = "recognition\\siamese_network_47452109\\data\\"
-
-md = MelanomaDataset(path)
-sub, ben, mal = md.get_subset(50, SEED)
-
-print(md.pair_generator(sub, 1.0))
 
