@@ -9,6 +9,7 @@ from torchvision import transforms
 import pandas as pd
 from PIL import Image
 import random
+from sklearn.model_selection import train_test_split
 
 # Helper functions: 
 def open_rgb(path):
@@ -83,6 +84,27 @@ class MelanomaDataset(Dataset):
         )
         return trans(img)
 
+    def split_data(self, data: pd.DataFrame, seed):
+        """
+        Split into Train, Validate and Test datasets
+        splits into 0.75:0.15:0.1
+        """
+        train, spare = train_test_split(
+            data,
+            test_size= 0.25,
+            stratify=data["target"],
+            random_state = seed
+        )
+
+        validate, test = train_test_split(
+            spare,
+            test_size= 0.4,
+            stratify=spare["target"],
+            random_state = seed
+        )
+
+        return train, validate, test
+    # TODO: Does this need to be here?
     def pair_generator(self, data: pd.DataFrame, proportion_pos = 0.5, seed = gv.SEED):
         """
         pair generator.
@@ -119,4 +141,3 @@ class MelanomaDataset(Dataset):
             img1 = self.transform(img1)
             img2 = self.transform(img2)
             yield img1, img2, label
-
