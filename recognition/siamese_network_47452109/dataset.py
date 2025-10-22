@@ -20,19 +20,51 @@ class MelanomaDataset(Dataset):
     """
     Reads raw data and gets it ready for machine learning
     """
-    def __init__(self, root):
+    def __init__(self, root, allow_transforms = True):
         self.root = root # folder with data
         self.metadata = self._read_metadata(root) 
-        self.data = None
+        self.allow_transforms = allow_transforms
+
+        self.sort = {0: [], 1: []}
+        for i, row in self.metadata.iterrows():
+            target = int(row["target"])
+            self.sort[target].append(i)
+
         super().__init__()
 
     def __getitem__(self, index):
         data = self.metadata.iloc[index]
+        # Get image 1 at index
         img_name = data["image_name"]
-        img = open_rgb(self.root + "\\train\\" + img_name + ".jpg")
-        img = self.transform(img)
-        target = data["target"]
-        return img, torch.tensor(target)
+        img_path = os.path.join(self.root, "train", img_name + ".jpg")
+        img1 = open_rgb(img_path)
+
+        target1 = data["target"]
+        
+        # Get random image 2
+        alt_label = random.choice([0,1])
+
+        img2_idx = random.choice(self.sort.get(alt_label))
+        img2_name = self.metadata.iloc[img2_idx]["image_name"]
+        img2_path = os.path.join(self.root, "train", img2_name + ".jpg")
+        img2 = open_rgb(img2_path)
+
+        target2 = self.metadata.iloc[img2_idx]["target"]
+
+        if self.allow_transforms:
+            # 50% chance of transforming images
+            if random.random() > 0.5:
+                img1 = self.transform(img1)
+                img2 = self.transform(img2)
+
+        if target1 == target2:
+            label = 0
+        else: label = 1
+
+        return img1, img2, torch.tensor(label)
+    
+    def __len__(self):
+        return len(self.metadata)
     
     def _read_metadata(self, root: str) -> pd.DataFrame:
         """
@@ -70,18 +102,17 @@ class MelanomaDataset(Dataset):
             .sample(frac=1.0, random_state=seed + 2).reset_index(drop=True)
         subset_df["file_name"] = subset_df["image_name"].astype(str) + ".jpg"
 
-        self.data = subset_df
         return subset_df
    
     def transform(self, img):
         """transform function"""
-        trans = transforms.Compose(
-            [
-                transforms.RandomHorizontalFlip(p=0.5),
-                transforms.RandomVerticalFlip(p=0.5),
-                transforms.ToTensor()
-            ]
-        )
+        trans = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.RandomVerticalFlip(p=0.5),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
         return trans(img)
 
     def split_data(self, data: pd.DataFrame, seed):
@@ -104,40 +135,3 @@ class MelanomaDataset(Dataset):
         )
 
         return train, validate, test
-    # TODO: Does this need to be here?
-    def pair_generator(self, data: pd.DataFrame, proportion_pos = 0.5, seed = gv.SEED):
-        """
-        pair generator.
-        """
-        img_dir = os.path.join(self.root, "train") + os.sep
-        sort = {0: [], 1: []}
-        for i, row in data.iterrows():
-            target = int(row["target"])
-            sort[target].append(i)
-
-        rng = random.Random(seed)
-
-        while True:
-            same = rng.random() < proportion_pos
-
-            if same: # two of same class
-                choice = rng.choice([0,1])
-                a,b = rng.sample(sort[choice], 2)
-                label = 1
-
-            else: # different classes
-                a = rng.choice(sort[0])
-                b = rng.choice(sort[1])
-                label = 0
-
-            r1 = data.iloc[a]
-            r2 = data.iloc[b]
-            p1 = img_dir + r1["file_name"]
-            p2 = img_dir + r2["file_name"]
-
-            img1 = open_rgb(p1)
-            img2 = open_rgb(p2)
-
-            img1 = self.transform(img1)
-            img2 = self.transform(img2)
-            yield img1, img2, label
