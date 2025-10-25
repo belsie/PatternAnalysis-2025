@@ -5,7 +5,8 @@ and / or provide visualisations where applicable
 from torch.utils.data import DataLoader, WeightedRandomSampler
 import argparse
 import torch
-import os
+import sys, os
+sys.path.append(os.path.dirname(__file__))
 from train import train_funct
 import global_vars as gv
 from modules import Network
@@ -92,6 +93,7 @@ def main():
     parser.add_argument('-lr', '--learning-rate', default= 1e-3)
     parser.add_argument("-e","--epochs", type=int, default=5)
     parser.add_argument("-m","--margin", type=int, default=0.4)
+    parser.add_argument("-s","--seed", type=int, default=gv.SEED)
     args = parser.parse_args()
 
     if args.epochs is not None:
@@ -135,7 +137,7 @@ def main():
     train_losses, val_losses = train_funct(train_loader, val_loader, margin=args.margin)
     plot_loss(train_losses, val_losses, e = args.epochs)
     model = Network().to(gv.DEVICE)
-    save_path = os.path.join(args.ROOT, "models", 'model_final.pth') 
+    save_path = os.path.join(args.root, "models", 'model_final.pth') 
     model.load_state_dict(torch.load(save_path))
     test_labels, test_predictions, test_distances = test(test_loader, model)
     plot_cm(test_labels, test_predictions)
