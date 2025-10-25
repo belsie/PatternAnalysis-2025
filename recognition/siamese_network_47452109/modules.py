@@ -9,7 +9,7 @@ import torch
 from torchvision import models
 
 class Network(nn.Module):
-    def __init__(self, embed_dim = 128, norm= True) -> None:
+    def __init__(self) -> None:
         super().__init__()
 
         # Pretrained model
@@ -18,24 +18,34 @@ class Network(nn.Module):
         # remove classifier head
         modules = list(resnet50.children())[:-1]
         self.encoder = nn.Sequential(*modules)
-        self.proj = nn.Linear(2048, embed_dim)
-        self.norm = norm
+        self.embed = nn.Sequential(
+            nn.Flatten(),
+            nn.Dropout(p=0.3),
+            nn.Linear(2048, 1024),
+            nn.ReLU(inplace=True),
+            nn.Linear(1024, 512),
+            nn.ReLU(inplace=True),
+            nn.Linear(512, 256),
+            nn.ReLU(inplace=True),
+            nn.Linear(256, 128),
+        )
 
-    def base_network(self, x: torch.Tensor) -> torch.Tensor:
-        enc = self.encoder(x)
-        enc = torch.flatten(enc, 1)
-        embed = self.proj(enc)
+    def forward(self, x):
+        features = self.encoder(x)
+        features = features.view(features.size(0), -1)
+        embedding = self.embed(features)
+        return embedding
+    
+    class SiameseNetwork(nn.Module):
+        def __init__(self, *args, **kwargs) -> None:
+            super().__init__(*args, **kwargs)
+            self.network = Network()
 
-        if self.norm:
-            embed = F.normalize(embed, p=2, dim=1)
-        return embed
+        def forward(self, input1, input2): 
+            output1 = self.network(input1)
+            output2 = self.network(input2)
 
-    def forward(self, x1: torch.Tensor, x2: torch.Tensor|None):
-        e1 = self.base_network(x1)
-        if x2 is None: 
-            return e1
-        e2 = self.base_network(x2)
-        return e1, e2
+            return output1, output2 
     
 class TripletLoss(nn.Module):
     def __init__(self, margin = 1) -> None:
