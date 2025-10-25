@@ -48,7 +48,7 @@ class Network(nn.Module):
             return output1, output2 
     
 class TripletLoss(nn.Module):
-    def __init__(self, margin = 1) -> None:
+    def __init__(self, margin = 1.0) -> None:
         super(TripletLoss, self).__init__()
         self.margin = margin
 

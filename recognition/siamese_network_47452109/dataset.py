@@ -20,7 +20,7 @@ class MelanomaDataset(Dataset):
     """
     Reads raw data and gets it ready for machine learning
     """
-    def __init__(self, root, allow_transforms = True, oversample_ratio=1.0,is_test=False):
+    def __init__(self, root, allow_transforms = True, oversample_ratio=1.0,is_test=False, metadata=None):
         self.root = root # folder with data
         self.metadata = self._read_metadata(root)
         self.allow_transforms = allow_transforms
